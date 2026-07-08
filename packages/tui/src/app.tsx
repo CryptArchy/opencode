@@ -197,6 +197,17 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
               targetFps: 60,
               gatherStats: false,
               exitOnCtrlC: false,
+              exitSignals: [
+                "SIGINT",
+                "SIGTERM",
+                "SIGQUIT",
+                "SIGABRT",
+                "SIGHUP",
+                // Interactive stdout cannot break as a pipe, but Wayland clipboard provider pipes can.
+                ...(process.stdout.isTTY ? [] : (["SIGPIPE"] as const)),
+                "SIGBREAK",
+                "SIGBUS",
+              ],
               useKittyKeyboard: {},
               autoFocus: false,
               openConsoleOnError: false,

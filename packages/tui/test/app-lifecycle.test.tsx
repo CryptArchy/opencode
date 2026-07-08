@@ -30,6 +30,7 @@ async function mockOpenTuiClipboard(
   } = {},
 ) {
   const calls = {
+    renderer: [] as Parameters<typeof openTui.createCliRenderer>[0][],
     host: [] as (HostClipboardOptions | undefined)[],
     adapter: [] as RendererClipboardBoundary[],
     service: [] as ClipboardOptions[],
@@ -57,7 +58,10 @@ async function mockOpenTuiClipboard(
 
   mock.module("@opentui/core", () => ({
     ...openTui,
-    createCliRenderer: async () => renderer,
+    createCliRenderer: async (input: Parameters<typeof openTui.createCliRenderer>[0]) => {
+      calls.renderer.push(input)
+      return renderer
+    },
     createHostClipboard: (input?: HostClipboardOptions) => {
       if (options.constructionError) throw options.constructionError
       calls.host.push(input)
@@ -161,6 +165,8 @@ test("SIGHUP clears title and disposes scoped resources once", async () => {
     ])
     expect(clipboard.adapter).toEqual([setup.renderer])
     expect(clipboard.service).toHaveLength(1)
+    expect(clipboard.renderer[0]?.exitSignals).toContain("SIGHUP")
+    expect(clipboard.renderer[0]?.exitSignals?.includes("SIGPIPE")).toBe(process.stdout.isTTY !== true)
     expect(clipboard.dispose).toBe(1)
     expect(clipboard.hostDispose).toBe(1)
     expect(process.listeners("SIGHUP").every((listener) => listeners.includes(listener))).toBe(true)

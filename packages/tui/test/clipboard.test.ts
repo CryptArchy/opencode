@@ -17,6 +17,7 @@ import {
 
 type OpenTuiFixture = {
   read?: ClipboardReadResult
+  reads?: ClipboardReadResult[]
   remote?: boolean
   onCoreRead?: (options: ClipboardReadOptions) => void
   onCoreWrite?: (text: string, options: ClipboardWriteOptions) => void
@@ -28,7 +29,7 @@ function openTuiClipboard(options: OpenTuiFixture = {}) {
   const host: HostClipboardService = {
     maxWriteBytes: 8 * 1024 * 1024,
     async read() {
-      return options.read ?? { status: "empty" }
+      return options.reads?.shift() ?? options.read ?? { status: "empty" }
     },
     async writeText() {
       options.onHostWrite?.()
@@ -123,6 +124,34 @@ test("maps empty host results and zero-byte text to no content", async () => {
       }),
     ).read(),
   ).toBeUndefined()
+})
+
+test("retries transient empty Wayland reads within the configured bound", async () => {
+  const requests: ClipboardReadOptions[] = []
+  const bytes = new TextEncoder().encode("eventually available")
+  const clipboard = createClipboardAdapter(
+    openTuiClipboard({
+      reads: [
+        { status: "empty" },
+        { status: "empty" },
+        { status: "read", representation: { mimeType: "text/plain", bytes } },
+      ],
+      onCoreRead: (input) => requests.push(input),
+    }),
+    3,
+  )
+
+  expect(await clipboard.read()).toEqual({ data: "eventually available", mime: "text/plain" })
+  expect(requests).toHaveLength(3)
+
+  const exhausted: ClipboardReadOptions[] = []
+  expect(
+    await createClipboardAdapter(
+      openTuiClipboard({ onCoreRead: (input) => exhausted.push(input) }),
+      3,
+    ).read(),
+  ).toBeUndefined()
+  expect(exhausted).toHaveLength(3)
 })
 
 test("preserves backend read failures and synthesizes operational errors", async () => {

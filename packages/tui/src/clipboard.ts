@@ -11,6 +11,8 @@ import type { ClipboardService, ClipboardWriteOutcome } from "./context/clipboar
 
 const timeoutMs = 1_000
 const maxReadBytes = 8 * 1024 * 1024
+// The pinned OpenTUI can settle a read before its queued Wayland MIME callbacks are drained.
+const waylandReadAttempts = 64
 
 export type ClipboardNotification = Readonly<{
   message: string
@@ -55,16 +57,14 @@ export function createTuiClipboard(renderer: RendererClipboardBoundary): OwnedCl
       }),
       terminal: createRendererClipboardAdapter(renderer),
     }),
+    process.platform === "linux" && Boolean(process.env.WAYLAND_DISPLAY) ? waylandReadAttempts : 1,
   )
 }
 
-export function createClipboardAdapter(clipboard: CoreClipboardService): OwnedClipboardService {
+export function createClipboardAdapter(clipboard: CoreClipboardService, readAttempts = 1): OwnedClipboardService {
   return {
     async read() {
-      const result = await clipboard.read({
-        preferredTypes: ["image/png", "text/plain"],
-        selection: "clipboard",
-      })
+      const result = await readClipboard(clipboard, readAttempts)
       if (result.status !== "read") {
         if (result.status === "empty" || result.status === "unsupported" || result.status === "cancelled") return
         if (result.status === "failed") throw result.error
@@ -102,6 +102,18 @@ export function createClipboardAdapter(clipboard: CoreClipboardService): OwnedCl
       return clipboard.dispose()
     },
   }
+}
+
+async function readClipboard(
+  clipboard: CoreClipboardService,
+  attempts: number,
+): Promise<Awaited<ReturnType<CoreClipboardService["read"]>>> {
+  const result = await clipboard.read({
+    preferredTypes: ["image/png", "text/plain"],
+    selection: "clipboard",
+  })
+  if (result.status !== "empty" || attempts <= 1) return result
+  return readClipboard(clipboard, attempts - 1)
 }
 
 export function classifyClipboardWriteResult(result: ClipboardWriteResult): ClipboardWriteOutcome {
