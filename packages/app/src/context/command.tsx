@@ -53,8 +53,15 @@ function signature(key: string, ctrl: boolean, meta: boolean, shift: boolean, al
   return `${key}:${mask}`
 }
 
+function normalizeEventKey(event: KeyboardEvent) {
+  if (event.ctrlKey && event.key.length === 1 && event.key.charCodeAt(0) <= 0x1f && event.code.startsWith("Key")) {
+    return event.code.slice(3).toLowerCase()
+  }
+  return normalizeKey(event.key)
+}
+
 function signatureFromEvent(event: KeyboardEvent) {
-  return signature(normalizeKey(event.key), event.ctrlKey, event.metaKey, event.shiftKey, event.altKey)
+  return signature(normalizeEventKey(event), event.ctrlKey, event.metaKey, event.shiftKey, event.altKey)
 }
 
 function isAllowedEditableKeybind(id: string | undefined) {
@@ -158,7 +165,7 @@ export function parseKeybind(config: string): Keybind[] {
 }
 
 export function matchKeybind(keybinds: Keybind[], event: KeyboardEvent): boolean {
-  const eventKey = normalizeKey(event.key)
+  const eventKey = normalizeEventKey(event)
 
   for (const kb of keybinds) {
     const keyMatch = kb.key === eventKey

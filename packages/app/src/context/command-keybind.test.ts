@@ -32,6 +32,14 @@ describe("command keybind helpers", () => {
     expect(matchKeybind(keybinds, new KeyboardEvent("keydown", { key: ",", ctrlKey: true, altKey: true }))).toBe(false)
   })
 
+  test("matchKeybind handles control-letter browser key values", () => {
+    const keybinds = parseKeybind("ctrl+l")
+
+    expect(matchKeybind(keybinds, new KeyboardEvent("keydown", { key: "\f", code: "KeyL", ctrlKey: true }))).toBe(
+      true,
+    )
+  })
+
   test("matchKeybind supports bracket keys", () => {
     const keybinds = parseKeybind("mod+alt+[, mod+alt+]")
     const prev = keybinds[0]
